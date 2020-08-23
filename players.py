@@ -65,6 +65,23 @@ class AI(Player):
         # breakpoint()
         return (x_fav, o_fav) 
 
+    def update_possible_moves(self, curr_poss, changed, nxt_mark, move, board) -> list:
+        new_poss_moves = []
+        poss_x, poss_o = curr_poss
+
+        for (tile_x, tile_y), _ in changed:
+            tile = board.logic[tile_y][tile_x]
+            new_poss_moves.append(((tile.get_value_mark('X'), tile.get_value_mark('O')), (tile_x, tile_y, nxt_mark)))
+        
+        x_fav = [poss for poss in new_poss_moves if poss[0][0] < 0]
+        o_fav = [poss for poss in new_poss_moves if poss[0][1] > 0]
+
+        x_fav = [(poss[0], (poss[1][0], poss[1][1], nxt_mark)) for poss in sorted(poss_x + x_fav, key=lambda x: x[0][0]) if poss[1] != move]
+        o_fav = [(poss[0], (poss[1][0], poss[1][1], nxt_mark)) for poss in sorted(poss_o + o_fav, key=lambda o: o[0][1]) if poss[1] != move]
+
+        new_poss_moves = (x_fav, o_fav)
+        return new_poss_moves
+                
     def get_move(self, board:Board, depth:int=5, branch_factor:int=20) -> tuple:
         """ Let the AI make a move given a board configuration """
         # board.draw_logic_state()
@@ -74,17 +91,17 @@ class AI(Player):
         poss_x = poss_x[:branch_factor//2]
         poss_o = poss_o[-branch_factor//2:]
 
-        move, _ = self.minimax(board, maximizer, depth, branch_factor, poss_moves=(poss_x, poss_o))
+        move, _ = self.negamaxAB(board, maximizer, depth, branch_factor, poss_moves=(poss_x, poss_o))
         print(self.minimax_stack_depth)
         self.minimax_stack_depth = 0
         return move
 
-    def minimax(self, board:Board, maximizer:bool, depth:int=5, branch_factor:int=10, \
-                poss_moves:tuple=(None, None), max_worst=float('-inf'), min_worst=float('inf')) -> Tuple[float, tuple]: 
+    def negamaxAB(self, board:Board, maximizer:bool, depth:int=5, branch_factor:int=10, \
+                poss_moves:tuple=(None, None), alpha=float('-inf'), beta=float('inf')) -> Tuple[float, tuple]: 
         """ Return the score the player can achieve at that state with curr_depth
         :param board: the current board
-        :param max_worst: the worst the maximizer can do
-        :param min_worst: the worst the minimizer can do
+        :param alpha: the worst the maximizer can do
+        :param beta: the worst the minimizer can do
         :param maximizer: whether the player want to maximize or minimize the board's score
         :param depth: the maximum depth the player can see ahead
         :return: the score the player think they can achieve.
@@ -107,47 +124,26 @@ class AI(Player):
             nxt_mark = 'O' if mark == 'X' else 'X'
 
             self.minimax_stack_depth += 1
+            
             orig_states = board.update_board(move, graphic=False)
             if board.check_win(move)[0]:
                 board.undo_change(orig_states, move)
-                return (move, float('-inf') if not maximizer else float('inf'))
-
+                return (move, float('inf'))
             if depth == 1:
-                nxt_ply_score = Board.score_board(board)
+                nxt_ply_score = Board.score_board(board) * (1 if maximizer else -1)
             else:
+                new_poss_moves = self.update_possible_moves(poss_moves, orig_states, nxt_mark, move, board)
+                nxt_move , nxt_ply_score = \
+                    self.negamaxAB(board, maximizer=(not maximizer), depth=depth-1,\
+                                 poss_moves=new_poss_moves, alpha=-beta, beta=-alpha)
+                nxt_ply_score *= -1
 
-                new_poss_moves = []
-                for (tile_x, tile_y), _ in orig_states:
-                    tile = board.logic[tile_y][tile_x]
-                    new_poss_moves.append(((tile.get_value_mark('X'), tile.get_value_mark('O')), (tile_x, tile_y, nxt_mark)))
-                
-                x_fav = [poss for poss in new_poss_moves if poss[0][0] < 0]
-                o_fav = [poss for poss in new_poss_moves if poss[0][1] > 0]
-
-                x_fav = [(poss[0], (poss[1][0], poss[1][1], nxt_mark)) for poss in sorted(poss_x + x_fav, key=lambda x: x[0][0]) if poss[1] != move]
-                o_fav = [(poss[0], (poss[1][0], poss[1][1], nxt_mark)) for poss in sorted(poss_o + o_fav, key=lambda o: o[0][1]) if poss[1] != move]
-
-                new_poss_moves = (x_fav, o_fav)
-                # breakpoint()
-
-                _ , nxt_ply_score = self.minimax(board, maximizer=(not maximizer), depth=depth-1, poss_moves=new_poss_moves, max_worst=max_worst, min_worst=min_worst)
-            
             choices.append((move, nxt_ply_score))
             board.undo_change(orig_states, move)
 
-            if maximizer:
-                if nxt_ply_score > min_worst:
-                    break
-                if nxt_ply_score > max_worst:
-                    max_worst = nxt_ply_score
-            else:
-                if nxt_ply_score < max_worst:
-                    break
-                if nxt_ply_score < min_worst:
-                    min_worst = nxt_ply_score 
-
-
-        if maximizer:    
-            return max(choices, key=lambda x: x[1])
-        else:
-            return min(choices, key=lambda x: x[1])
+            if nxt_ply_score > alpha:
+                alpha = nxt_ply_score
+            if alpha > beta:
+                break
+                
+        return max(choices, key=lambda x: x[1])

@@ -5,9 +5,10 @@ from graphics import GraphWin
 from time import time
 
 # TODO
-# Create good internal state of board for heuristic
-# Create move selection states
-# Create move ranker
+# implement iterative deepening for better move ordering
+# implement hashtable
+# implement quiescent search
+# optimize some helper methods
 # create buttons and other GUI elements
 # create undo features
 

@@ -37,9 +37,6 @@ class Tile():
 
     def set_value(self, direct:int_str, mark:str, val:int) -> None:
         """ Set the value of the chain_length """
-        directions = {'down': 0, 'diag_down_right': 1, 'right': 2, 'diag_up_right': 3, \
-                      'up': 4, 'diag_up_left': 5, 'left': 6, 'diag_down_left': 7}
-
         if isinstance(direct, int):
             if mark == 'O': self.len_chains_O[direct] = val
             else: self.len_chains_X[direct] = val
@@ -55,14 +52,6 @@ class Board():
     """
 
     ### UTILITY FUNCTIONS ### 
-    @staticmethod
-    def copy_board(board:'Board') -> 'Board':
-        """ Create a deep copy of board """
-        new_board = Board(board.window_width, board.window_height, board.tile_size, verbose=False)
-        new_board.tiles = deepcopy(board.tiles)
-        new_board.logic = deepcopy(board.logic)
-        return new_board
-
     def coord_tile_to_grid(self, tile_x:int, tile_y:int) -> Tuple[int, int]:
         """ Get the tile location and return pixel location """
         return (int((tile_x + 0.5) * self.tile_size), int((tile_y+0.5)*self.tile_size))
@@ -200,7 +189,6 @@ class Board():
             
             same_chains = self.get_chains_mark((tile_x, tile_y), mark)
             same_changed = [x[1] for x in same_chains]
-            same_line_lens = [x[0] for x in same_chains]
 
             diff_chains = self.get_chains_mark((tile_x, tile_y), nxt_mark)
             diff_changed = [x[1] if 4 > x[0] > 0 else [] for x in diff_chains]
@@ -209,34 +197,28 @@ class Board():
             
             for i in range(8):
                 j = i + 4 if i < 4 else i - 4
-                len_chain = same_line_lens[i] + same_line_lens[j] + 1 
-                if same_changed[i]:                
+
+                same = len(same_changed[i]) != 0
+                changed = same_changed[i] if same else diff_changed[i]
+                if same:
+                    len_chain = same_chains[i][0] + same_chains[j][0] + 1 
                     blocked = len(same_changed[j]) == 0
-                    for f in range(len(same_changed[i])):
-                        (c_x, c_y) = same_changed[i][f]
-                        tile = self.logic[c_y][c_x]
-                        orig.append(((c_x, c_y), [deepcopy(tile.len_chains_O), deepcopy(tile.len_chains_X)]))
+
+                for f in range(len(changed)):
+                    (c_x, c_y) = changed[f]
+                    tile = self.logic[c_y][c_x]
+                    orig.append(((c_x, c_y), [deepcopy(tile.len_chains_O), deepcopy(tile.len_chains_X)]))
+
+                    if same:
                         tile.set_value(j, mark, 1 + (len_chain - blocked)**2)
-                        if tile.get_value_mark_place(i, nxt_mark)  > 0:
-                            n = (tile.get_value_mark_place(i, nxt_mark) - 1) ** (1/2)
-                            tile.set_value(i, nxt_mark, (n-1)**2 + 1)
-                        if tile.get_value_mark_place(j, nxt_mark)  > 0:
-                            n = (tile.get_value_mark_place(j, nxt_mark) - 1) ** (1/2)
-                            tile.set_value(j, nxt_mark, (n-1)**2 + 1)
 
-                elif diff_changed[i]:
-                    for f in range(len(diff_changed[i])):
-                        (c_x, c_y) = diff_changed[i][f]
-                        tile = self.logic[c_y][c_x]
-                        orig.append(((c_x, c_y), [deepcopy(tile.len_chains_O), deepcopy(tile.len_chains_X)]))
-                        if mark == 'X':
-                            n = (tile.len_chains_O[j] - 1) ** (1/2)
-                            tile.set_value(j, 'O', (n-1)**2 + 1)
-                        else:
-                            n = (tile.len_chains_X[j] - 1) ** (1/2)
-                            tile.set_value(j, 'X', (n-1)**2 + 1)
+                    if tile.get_value_mark_place(i, nxt_mark)  > 0:
+                        n = (tile.get_value_mark_place(i, nxt_mark) - 1) ** (1/2)
+                        tile.set_value(i, nxt_mark, (n-1)**2 + 1)
+                    if tile.get_value_mark_place(j, nxt_mark)  > 0:
+                        n = (tile.get_value_mark_place(j, nxt_mark) - 1) ** (1/2)
+                        tile.set_value(j, nxt_mark, (n-1)**2 + 1)
 
-            # breakpoint()
             return orig
 
         return [(None, None)]
