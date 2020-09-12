@@ -3,7 +3,7 @@ While some optimizations are added, this project is simply for personal practice
 
 ## Playing
 
-The game uses the (graphics.py)[https://mcsp.wartburg.edu/zelle/python/graphics.py] file made by John Zelle for use with the book “Python Programming: An Introduction to Computer
+The game uses the [graphics.py](https://mcsp.wartburg.edu/zelle/python/graphics.py) file made by John Zelle for use with the book “Python Programming: An Introduction to Computer
 Science” (Franklin, Beedle & Associates). This required the Tkinter package. Install it from the command line:
 
 ``` bash
