@@ -66,13 +66,23 @@ class AI(Player):
         return (x_fav, o_fav) 
 
     def update_possible_moves(self, curr_poss, changed, nxt_mark, move, board) -> list:
+        """
+        Update possible moves for player to try.
+        :param changed: constant 16 tiles whose values were changed
+        :curr_pos: constant branch_factor number of moves
+        """
         new_poss_moves = []
+        to_remove = dict()
         poss_x, poss_o = curr_poss
 
         for (tile_x, tile_y), _ in changed:
             tile = board.logic[tile_y][tile_x]
-            new_poss_moves.append(((tile.get_value_mark('X'), tile.get_value_mark('O')), (tile_x, tile_y, nxt_mark)))
+            to_remove[(tile_x, tile_y)] = 1
+            new_poss_moves.append(((-sum(tile.len_chains_X), sum(tile.len_chains_O)), (tile_x, tile_y, nxt_mark)))
         
+        poss_x = [poss for poss in poss_x if (poss[1][0], poss[1][1]) not in to_remove]
+        poss_o = [poss for poss in poss_o if (poss[1][0], poss[1][1]) not in to_remove]
+
         x_fav = [poss for poss in new_poss_moves if poss[0][0] < 0]
         o_fav = [poss for poss in new_poss_moves if poss[0][1] > 0]
 
@@ -108,13 +118,13 @@ class AI(Player):
         """
         poss_x, poss_o = poss_moves # determines branching factor
         poss_x = poss_x[:branch_factor//2]
-        poss_o = poss_o[-branch_factor//2:]
+        poss_o = poss_o[-branch_factor//2:][::-1]
 
         # create a good move ordering
         if maximizer:
-            poss = poss_o[len(poss_o)//2:] + poss_x[:len(poss_x)//2] + poss_o[:len(poss_o)//2] + poss_x[len(poss_o)//2:] 
+            poss = poss_o[:len(poss_o)//2] + poss_x[:len(poss_x)//2] + poss_o[len(poss_o)//2:] + poss_x[len(poss_x)//2:] 
         else:
-            poss = poss_x[:len(poss_x)//2] + poss_o[len(poss_o)//2:] + poss_x[len(poss_x)//2:] + poss_o[:len(poss_o)//2] 
+            poss = poss_x[:len(poss_x)//2] + poss_o[:len(poss_o)//2] + poss_x[len(poss_x)//2:] + poss_o[len(poss_o)//2:] 
 
         # board.draw_logic_state()
         choices = []
@@ -134,7 +144,7 @@ class AI(Player):
             else:
                 new_poss_moves = self.update_possible_moves(poss_moves, orig_states, nxt_mark, move, board)
                 nxt_move , nxt_ply_score = \
-                    self.negamaxAB(board, maximizer=(not maximizer), depth=depth-1,\
+                    self.negamaxAB(board, maximizer=(not maximizer), depth=depth-1, branch_factor=branch_factor, \
                                  poss_moves=new_poss_moves, alpha=-beta, beta=-alpha)
                 nxt_ply_score *= -1
 
