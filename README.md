@@ -2,6 +2,14 @@
 While some optimizations are added, this project is simply for personal practice with python and recursive algorithm. The AI is not very smart, and with about 10s of thinking it can play pretty well, but nowhere near expert level.
 
 ## Playing
+
+The game uses the (graphics.py)[https://mcsp.wartburg.edu/zelle/python/graphics.py] file made by John Zelle for use with the book “Python Programming: An Introduction to Computer
+Science” (Franklin, Beedle & Associates). This required the Tkinter package. Install it from the command line:
+
+``` bash
+pip install tkinter
+```
+
 Run the game by running the file gomoku.py using the python interpreter in the command line:
 
 ``` bash
