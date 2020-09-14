@@ -234,6 +234,25 @@ class Board():
 
         return
 
+    def update_state(self, state:list) -> None:
+        """
+        Update the board in a sequence of moves
+        """
+        self.state_changed = []
+
+        for move in state:
+            changed = self.update_board(move, graphic=False)
+            self.state_changed.append((move, changed))
+
+    def undo_state(self):
+        """
+        Undo a sequence of moves.
+        The sequence of moves MUST have been applied through update_state function.
+        """
+        if self.state_changed:
+            for move, changed in self.state_changed[::-1]:
+                self.undo_change(changed, move)
+
     @staticmethod
     def score_board(board:'Board') -> float:
         """ Score the board value for the first player O. the higher the better """
@@ -245,6 +264,15 @@ class Board():
             return float(score)
         except:
             breakpoint()
+
+    @staticmethod
+    def score_move(board: 'Board', move: tuple) -> float:
+        """ Score the value of a move """
+        changed = board.update_board(move, graphic=False)
+        # res = Board.score_board(board)
+        res = sum([board.logic[change[0][1]][change[0][0]].get_value() for change in changed])
+        board.undo_change(changed, move)
+        return res
 
     ### INSTANCE DRAW METHODS ###
 

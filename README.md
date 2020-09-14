@@ -21,7 +21,7 @@ Enter values as prompted:
 * Tile's size: in pixels. Length of a tile's edge. A tile is always square and always fill up evenly within the window. Thus, the tile's size must be a common divisor of the board's width and height. If not, adjustments are automatically made.
 * Play with AI: y for yes, any other character for no.
 * Minimax-depth: number of moves the AI will look ahead. 4-5 is recommended.
-* Branch-factor: number of moves the AI consider at any depth level. 10 is recommended.
+* Branch-factor: number of moves the AI consider at any depth level. 10-16 is recommended.
 
 Click the board once a player wins to close the game.
 

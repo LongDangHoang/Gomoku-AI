@@ -43,6 +43,7 @@ def main():
             if play_AI == 'y':
                 start = time()
                 move = player2.get_move(board, depth=player2.minimax_depth, branch_factor=player2.branch_factor)
+                # move = player2.iterative_deepening_search(board, player2.minimax_depth, player2.branch_factor, 5)
                 end = time()
                 print("Time elapsed for move {} is {:2f}s".format(turn + 1, end - start))
             else:
