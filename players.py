@@ -42,10 +42,9 @@ class AI(Player):
         super().__init__()
         self.minimax_depth = depth
         self.branch_factor = branch_factor
-        self.minimax_stack_depth = 0
+        self.transposition_table = dict()
 
-
-    def get_possible_moves(self, board:Board, maximizer:bool, branch_factor:int) -> Tuple[list, list]:
+    def get_possible_moves(self, board:Board, maximizer:bool) -> Tuple[list, list]:
         """ Get the possible moves AI can take on a given board position """        
 
         mark = 'O' if maximizer else 'X'
@@ -68,19 +67,9 @@ class AI(Player):
         x_fav = [move for move in sorted(x_fav, key=lambda x: x[0][0])]
         o_fav = [move for move in sorted(o_fav, key=lambda o: o[0][1])]
 
-        if len(x_fav) + len(o_fav) >= branch_factor:
-            if len(x_fav) < branch_factor // 2:
-                o_fav = o_fav[-(branch_factor - len(x_fav)):]
-            elif len(o_fav) < branch_factor // 2:
-                x_fav = x_fav[:(branch_factor - len(o_fav))]
-            else:
-                x_fav = x_fav[:(branch_factor // 2)]
-                o_fav = o_fav[-(branch_factor // 2):]
-
         return (x_fav, o_fav)
 
-    def update_possible_moves(self, curr_poss: list, changed: list, move: tuple, \
-                             board: Board, branch_factor: int, debug: bool=False) -> list:
+    def update_possible_moves(self, curr_poss: list, changed: list, move: tuple, board: Board) -> list:
         """
         Update possible moves for player to try.
         :param changed: constant 16 tiles whose values were changed
@@ -117,205 +106,119 @@ class AI(Player):
         x_fav = [(poss[0], (poss[1][0], poss[1][1], nxt_mark)) for poss in sorted(poss_x + x_fav, key=lambda x: x[0][0])]
         o_fav = [(poss[0], (poss[1][0], poss[1][1], nxt_mark)) for poss in sorted(poss_o + o_fav, key=lambda o: o[0][1])]
         
-        if len(x_fav) + len(o_fav) >= branch_factor:
-            if len(x_fav) < branch_factor // 2:
-                o_fav = o_fav[-(branch_factor - len(x_fav)):]
-            elif len(o_fav) < branch_factor // 2:
-                x_fav = x_fav[:(branch_factor - len(o_fav))]
-            else:
-                x_fav = x_fav[:(branch_factor // 2)]
-                o_fav = o_fav[-(branch_factor // 2):]
-
         return (x_fav, o_fav)
                 
     def get_move(self, board:Board, depth:int=5, branch_factor:int=20) -> tuple:
         """ Let the AI make a move given a board configuration """
-        # board.draw_logic_state()
-
         maximizer = self.mark == 'O'
-        poss_x, poss_o = self.get_possible_moves(board, maximizer, branch_factor)
+        poss_x, poss_o = self.get_possible_moves(board, maximizer)
+        self.hash_queries_success = 0
+        self.num_states_searched = 0
 
-        if len(poss_x) == 0 and len(poss_o) == 0:
-            raise Exception("Board is full. The game is tied")
+        (move, _), _ = self.negamaxAB(board, maximizer, depth, branch_factor, poss_moves=(poss_x, poss_o))
+        print(f"Searched {self.num_states_searched} states, of which {self.hash_queries_success} are retrieved from the transposition table")
 
-        move, _ = self.negamaxAB(board, maximizer, depth, branch_factor, poss_moves=(poss_x, poss_o))
-        print(self.minimax_stack_depth)
-        self.minimax_stack_depth = 0
         return move
     
-    def iterative_deepening_search(self, board: Board, depth: int=5,\
-                                branch_factor: int=10, time_limit: float =5):
-        """
-        Run iterative deepning search
-        """
-        # initialise some variables
-        curr_maximizer = self.mark == 'O'
-        curr_mark = self.mark
-        nxt_mark = 'X' if curr_mark == 'O' else 'O'
-
-        init_poss = self.get_possible_moves(board, curr_maximizer, branch_factor)
-        init_state = []
-
-        states = [init_state]
-        poss_moves = [init_poss] # possible moves at the end of the sequence
-        iter_depth = 1
-
-        # default (and initial) best move
-        if curr_maximizer:
-            best_move = init_poss[1][-1] if len(init_poss[1]) > 0 else init_poss[0][0]
-        else:
-            best_move = init_poss[0][0] if len(init_poss[0]) > 0 else init_poss[1][-1]
-
+    def get_move_iterative_deepening(self, board: Board, depth: int=5, branch_factor: int=20, time_lim: float=5) -> tuple:
         
+        maximizer = self.mark == 'O'
+        max_depth = depth
+        cur_depth = 1
+
+        poss_x, poss_o = self.get_possible_moves(board, maximizer)
+
+        self.hash_queries_success = 0
+        self.num_states_searched = 0
+
         start = time()
-        while time() - start <= time_limit and iter_depth <= depth:
+        while time() - start < time_lim and cur_depth <= max_depth:
+            (move, _), choices = self.negamaxAB(board, maximizer, cur_depth, branch_factor, poss_moves=(poss_x, poss_o), move_is_ordered=cur_depth != 1)
 
-            # at a certain depth, find state scores of possible states from that depth, before 
-            # returning them upwards through minimax
+            cur_depth += 1
+            # reorder possible moves for better pruning
+            choice_dict = {move: state_score * (1 if maximizer else -1) for move, state_score in choices}
+            poss = sorted(poss_x + poss_o, key=lambda poss: choice_dict[poss[1]] if poss[1] in choice_dict else 0)
+            poss_x, poss_o = poss[:len(poss) // 2], poss[len(poss)//2:]
 
-            # for access at a later depth
-            new_states = []
-            new_poss_moves = []
-            break_flag = False
+        print(f"Searched {self.num_states_searched} states, of which {self.hash_queries_success} are retrieved from the transposition table")
 
-            # each deeper level requires a rest of alpha-beta values
-            alpha = float('-inf')
-            beta = float('inf')
-
-            # pass to calculate all state scores with alpha-beta pruning
-            for i in range(len(states)):
-
-                # get the state (sequence of moves leading to the board's state)
-                # and the possible moves to be considered at the state
-                state = states[i]
-                poss_move = poss_moves[i]
-                options = []
-
-                # create a good move ordering
-                if curr_maximizer:
-                    poss = poss_move[1][:len(poss_move[1])//2] + poss_move[0][:len(poss_move[0])//2] + poss_move[1][len(poss_move[1])//2:] + poss_move[0][len(poss_move[0])//2:] 
-                else:
-                    poss = poss_move[0][:len(poss_move[0])//2] + poss_move[1][:len(poss_move[1])//2] + poss_move[0][len(poss_move[0])//2:] + poss_move[1][len(poss_move[1])//2:] 
-                
-                # breakpoint()
-                board.update_state(state)
-
-                # calculate the state_score by getting the min/max of all possible moves from the state
-                for (score_x, score_o), move in poss:
-
-                    changed = board.update_board(move, graphic=False)
-
-                    # saves future states for further deepening
-                    new_poss_moves.append(self.update_possible_moves(poss_move, changed, move, board, branch_factor))
-                    new_states.append(state + [move])
-                    board.undo_change(changed, move)
-                    
-                    if break_flag is False:
-                        self.minimax_stack_depth += 1
-
-                        if board.check_win(move)[0]:
-                            state_score = float('inf') if move[2] == 'O' else -float('inf')
-                        else:
-                            state_score = Board.score_board(board)
-
-                        # pruning
-                        if curr_maximizer:
-                            if state_score > beta:
-                                break_flag = True
-                        else:
-                            if state_score < alpha:
-                                break_flag = True
-
-                        options.append((move, state_score))
-
-                board.undo()
-                
-                if break_flag is False:
-                    best, state_score = max(options, key=lambda x: x[1]) if curr_maximizer else min(options, key=lambda x: x[1])
-                
-                # going back from state score through minimax to find optimal move
-
-                # breakpoint()
-                if curr_maximizer:
-                    alpha = state_score
-                    if alpha < beta:
-                        best_move = state[0]
-                else:
-                    if state_score < beta:
-                        beta = state_score
-                        if beta > alpha:
-                            best_move = state[0]
-
-                
-            states = new_states
-            poss_moves = new_poss_moves
-            iter_depth += 1
-
-            nxt_mark, curr_mark = curr_mark, nxt_mark
-            curr_maximizer = not curr_maximizer
-
-        # breakpoint()
-
-        print("Searched {} moves.".format(self.minimax_stack_depth))
-
-        return best_move
-        
-
+        return move
+    
     def negamaxAB(self, board:Board, maximizer:bool, depth:int=5, branch_factor:int=10, \
-                poss_moves:tuple=(None, None), alpha=float('-inf'), beta=float('inf')) -> Tuple[float, tuple]: 
+                poss_moves:tuple=(None, None), alpha=float('-inf'), beta=float('inf'), \
+                move_is_ordered: bool=False) -> Tuple[float, tuple]: 
+
         """ Return the score the player can achieve at that state with curr_depth
         :param board: the current board
         :param alpha: the worst the maximizer can do
         :param beta: the worst the minimizer can do
         :param maximizer: whether the player want to maximize or minimize the board's score
         :param depth: the maximum depth the player can see ahead
+        :param branch_factor: the number of moves the player can consider at any given depth
+        :param poss_moves: the moves the player will choose and search from
+        :param move_is_ordered: whether the given poss_moves is already ordered or not
         :return: the score the player think they can achieve.
         """
-        poss_x, poss_o = poss_moves # determines branching factor
+        if move_is_ordered is False:
+            poss_x, poss_o = poss_moves # determines branching factor
 
-        # create a good move ordering
-        # if maximizer:
-        #     poss = poss_o[:len(poss_o)//2] + poss_x[:len(poss_x)//2] + poss_o[len(poss_o)//2:] + poss_x[len(poss_x)//2:] 
-        # else:
-        #     poss = poss_x[:len(poss_x)//2] + poss_o[:len(poss_o)//2] + poss_x[len(poss_x)//2:] + poss_o[len(poss_o)//2:] 
-        
-        if maximizer:
-            poss = poss_o[::-1] + poss_x[::-1] 
+            if len(poss_x) + len(poss_o) >= branch_factor:
+                if len(poss_x) < branch_factor // 2:
+                    poss_o = poss_o[-(branch_factor - len(poss_x)):]
+                elif len(poss_o) < branch_factor // 2:
+                    poss_x = poss_x[:(branch_factor - len(poss_o))]
+                else:
+                    poss_x = poss_x[:(branch_factor // 2)]
+                    poss_o = poss_o[-(branch_factor // 2):]
+
+            # for a better move ordering
+            if maximizer:
+                poss = poss_o[::-1] + poss_x[::-1] 
+            else:
+                poss = poss_x + poss_o
         else:
-            poss = poss_x + poss_o
-        
-        # poss = sorted(poss_x + poss_o, key=lambda poss: Board.score_move(board, poss[1]), reverse=maximizer)
+            poss = poss_moves[0] + poss_moves[1]
 
-        # board.draw_logic_state()
         choices = []
-
+        has_no_board = True
+        
         for (score_x, score_y), move in poss:
             mark = move[2]
             nxt_mark = 'O' if mark == 'X' else 'X'
 
-            self.minimax_stack_depth += 1
-            
+            self.num_states_searched += 1            
             orig_states = board.update_board(move, graphic=False)
+            board_hash = board.get_bit_repr()
 
-            if board.check_win(move)[0]:
-                board.undo_change(orig_states, move)
-                return (move, float('inf'))
-            elif board.check_full():
-                board.undo_change(orig_states, move)
-                return (move, 0)
+            try:
+                state_score = self.transposition_table[(board_hash, depth)] * (1 if maximizer else -1)
+                self.hash_queries_success += 1
+            except KeyError:
 
-            if depth == 1:
-                state_score = Board.score_board(board) * (1 if maximizer else -1)
-            else:
-                new_poss_moves = self.update_possible_moves(poss_moves, orig_states, move, board, branch_factor)
+                if board.check_win(move)[0]:
+                    self.transposition_table[(board_hash, depth)] = float('inf') if maximizer else -float('inf')
+                    board.undo_change(orig_states, move)
+                    choices.append((move, float('inf')))
+                    return (move, float('inf')), choices
+                elif board.check_full():
+                    self.transposition_table[(board_hash, depth)] = 0 
+                    board.undo_change(orig_states, move)
+                    choices.append((move, 0))
+                    return (move, 0), choices
 
-                # assert self.check_duplicates(new_poss_moves) is False 
+                if depth == 1:
+                    state_score = Board.score_board(board) * (1 if maximizer else -1)
+                else:
+                    new_poss_moves = self.update_possible_moves(poss_moves, orig_states, move, board)
 
-                _ , state_score = \
-                    self.negamaxAB(board, maximizer=(not maximizer), depth=depth-1, branch_factor=branch_factor, \
-                                poss_moves=new_poss_moves, alpha=-beta, beta=-alpha)
-                state_score *= -1
-
+                    (_ , state_score), _ = \
+                        self.negamaxAB(board, maximizer=(not maximizer), depth=depth-1, branch_factor=branch_factor, \
+                                    poss_moves=new_poss_moves, alpha=-beta, beta=-alpha)
+                    
+                    state_score *= -1
+                
+            self.transposition_table[(board_hash, depth)] = state_score if maximizer else -state_score
             choices.append((move, state_score))
             board.undo_change(orig_states, move)
 
@@ -324,15 +227,4 @@ class AI(Player):
             if alpha > beta:
                 break
         
-        return max(choices, key=lambda x: x[1])
-
-    def check_duplicates(self, poss: list):
-        poss = sorted(poss[0] + poss[1], key=lambda x: x[1])
-
-        dup = poss[0]
-        for i in range(1, len(poss)):
-            if poss[i][1] == dup:
-                return True
-            dup = poss[i][1]
-        
-        return False
+        return max(choices, key=lambda x: x[1]), choices

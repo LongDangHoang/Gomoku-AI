@@ -90,6 +90,9 @@ class Board():
 
         return [(cands[i], changed[i]) for i in range(8)]
 
+    def get_bit_repr(self):
+        return (self.tiles_X, self.tiles_O)
+
     ### INSTANCE LOGIC METHODS ###
 
     def __init__(self, window_width:int, window_height:int, tile_size:int, win_length:int=5, verbose:bool=True) -> None:
@@ -108,14 +111,17 @@ class Board():
         self.tiles = [[0] * len(range(tile_size // 2, window_width, tile_size)) for i in range(tile_size // 2, window_height, tile_size)]
         self.logic = [[Tile() for j in range(len(self.tiles[0]))] for i in self.tiles] # 4 values for 4 directions a chain can take
 
+        self.num_tiles_placed = 0
+        self.total_num_tiles = len(self.tiles) * len(self.tiles[0]) 
+
+        self.tiles_X = 0
+        self.tiles_O = 0
+
         self.window_width = window_width
         self.window_height = window_height
         self.tile_size = tile_size
         self.window = None
         self.logic_window = None
-
-        self.num_tiles_placed = 0
-        self.total_num_tiles = len(self.tiles) * len(self.tiles[0]) 
 
     def check_win(self, move:tuple, win_length:int=5) -> Tuple[bool, Tuple[tuple, tuple]]:
         """ Check if a move wins the game 
@@ -183,6 +189,11 @@ class Board():
 
         tile_x, tile_y, mark = move
         self.num_tiles_placed += 1
+    
+        if mark == 'O':
+            self.tiles_O |= 1 << (tile_y * (self.window_width // self.tile_size) + tile_x)
+        else:
+            self.tiles_X |= 1 << (tile_y * (self.window_width // self.tile_size) + tile_x)
 
         # update graphic
         if graphic and self.window:
@@ -231,36 +242,20 @@ class Board():
 
     def undo_change(self, change:list, move:tuple) -> None:
         """ Undo the list of changes made by update_board """
-        tile_x, tile_y, _ = move
+        tile_x, tile_y, mark = move
         self.tiles[tile_y][tile_x] = 0
         self.num_tiles_placed -= 1
+        
+        if mark == 'O':
+            self.tiles_O &= ~(1 << (tile_y * (self.window_width // self.tile_size) + tile_x))
+        else:
+            self.tiles_X &= ~(1 << (tile_y * (self.window_width // self.tile_size) + tile_x))
         
         for (tile_x, tile_y), [states_O, states_X] in change:
             self.logic[tile_y][tile_x].len_chains_O = states_O
             self.logic[tile_y][tile_x].len_chains_X = states_X
 
         return
-
-    def update_state(self, state:list) -> None:
-        """
-        Update the board in a sequence of moves
-        """
-        self.state_changed = []
-
-        for move in state:
-            changed = self.update_board(move, graphic=False)
-            self.state_changed.append((move, changed))
-
-    def undo_state(self):
-        """
-        Undo a sequence of moves.
-        The sequence of moves MUST have been applied through update_state function.
-        """
-        if self.state_changed:
-            for move, changed in self.state_changed[::-1]:
-                self.undo_change(changed, move)
-
-
 
     @staticmethod
     def score_board(board:'Board') -> float:

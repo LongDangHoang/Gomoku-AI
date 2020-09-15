@@ -42,19 +42,22 @@ def main():
         else:
             if play_AI == 'y':
                 start = time()
-                move = player2.get_move(board, depth=player2.minimax_depth, branch_factor=player2.branch_factor)
-                # move = player2.iterative_deepening_search(board, player2.minimax_depth, player2.branch_factor, 5)
+                # move = player2.get_move(board, depth=player2.minimax_depth, branch_factor=player2.branch_factor)
+                move = player2.get_move_iterative_deepening(board, player2.minimax_depth, player2.branch_factor, 5)
                 end = time()
                 print("Time elapsed for move {} is {:2f}s".format(turn + 1, end - start))
             else:
                 move = player2.get_move(board)
         changed = board.update_board(move)
         win, pos = board.check_win(move)
+        
+        if turn == 6:
+            breakpoint()
+
         if win:
             board.draw_winning_line(pos[0], pos[1])
             break
 
-        
         if not board.check_full():
             turn += 1
         else:
