@@ -111,9 +111,11 @@ class Board():
         self.window_width = window_width
         self.window_height = window_height
         self.tile_size = tile_size
-        self.win_length = win_length
         self.window = None
         self.logic_window = None
+
+        self.num_tiles_placed = 0
+        self.total_num_tiles = len(self.tiles) * len(self.tiles[0]) 
 
     def check_win(self, move:tuple, win_length:int=5) -> Tuple[bool, Tuple[tuple, tuple]]:
         """ Check if a move wins the game 
@@ -135,8 +137,8 @@ class Board():
 
             # check if there are consecutives of mark of win_length in cand:
             if len(cand) >= win_length:
-                for i in range(self.win_length):
-                    seq = cand[i:i+self.win_length]
+                for i in range(win_length):
+                    seq = cand[i:i+win_length]
                     seq_mark = [x[0] for x in seq]
                     try:
                         seq_start = seq[0][1]
@@ -144,7 +146,7 @@ class Board():
                     except:
                         breakpoint()
                     
-                    if seq_mark == [mark] * self.win_length:
+                    if seq_mark == [mark] * win_length:
                         return True, (seq_start, seq_end)
         
         return False, None
@@ -168,6 +170,9 @@ class Board():
 
         return self.tiles[move[1]][move[0]] == 0
 
+    def check_full(self):
+        return self.num_tiles_placed == self.total_num_tiles
+
     def update_board(self, move:tuple, graphic:bool=True, logic:bool=True) -> list:
         """ Update the board based on a move. Can update graphically, logically, or either. 
         :param move: a legal move: (selected_tile.x_pos, selected_tile.y_pos, player.mark)
@@ -177,6 +182,7 @@ class Board():
         """
 
         tile_x, tile_y, mark = move
+        self.num_tiles_placed += 1
 
         # update graphic
         if graphic and self.window:
@@ -227,6 +233,7 @@ class Board():
         """ Undo the list of changes made by update_board """
         tile_x, tile_y, _ = move
         self.tiles[tile_y][tile_x] = 0
+        self.num_tiles_placed -= 1
         
         for (tile_x, tile_y), [states_O, states_X] in change:
             self.logic[tile_y][tile_x].len_chains_O = states_O
@@ -252,6 +259,8 @@ class Board():
         if self.state_changed:
             for move, changed in self.state_changed[::-1]:
                 self.undo_change(changed, move)
+
+
 
     @staticmethod
     def score_board(board:'Board') -> float:

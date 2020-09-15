@@ -49,15 +49,22 @@ def main():
             else:
                 move = player2.get_move(board)
         changed = board.update_board(move)
-        # breakpoint()
         win, pos = board.check_win(move)
         if win:
             board.draw_winning_line(pos[0], pos[1])
             break
 
-        turn += 1
+        
+        if not board.check_full():
+            turn += 1
+        else:
+            break
 
-    print("Player {} wins!".format(2 - int(turn % 2 == 0)))
+    if board.check_full() is False:
+        print("Player {} wins!".format(2 - int(turn % 2 == 0)))
+    else:
+        print("The game is a tie!")
+
     board.window.getMouse()
     board.window.close()
 

@@ -50,6 +50,9 @@ class AI(Player):
 
         mark = 'O' if maximizer else 'X'
         possible_moves = []
+        x_fav = []
+        o_fav = []
+        both_fav = []
 
         for tile_y in range(len(board.tiles)):
             for tile_x in range(len(board.tiles[tile_y])):
@@ -57,15 +60,24 @@ class AI(Player):
                     score_X = board.logic[tile_y][tile_x].get_value_mark('X')
                     score_O = board.logic[tile_y][tile_x].get_value_mark('O') 
                     if score_X != 0 or score_O != 0:
-                        possible_moves.append(((score_X, score_O), (tile_x, tile_y, mark)))
+                        if -score_X > score_O:
+                            x_fav.append(((score_X, score_O), (tile_x, tile_y, mark)))
+                        else:
+                            o_fav.append(((score_X, score_O), (tile_x, tile_y, mark)))
 
-        x_fav = [move for move in possible_moves if move[0][0] < 0]
-        o_fav = [move for move in possible_moves if move[0][1] > 0]
+        x_fav = [move for move in sorted(x_fav, key=lambda x: x[0][0])]
+        o_fav = [move for move in sorted(o_fav, key=lambda o: o[0][1])]
 
-        x_fav = [move for move in sorted(x_fav, key=lambda x: x[0][0])][:branch_factor//2]
-        o_fav = [move for move in sorted(o_fav, key=lambda o: o[0][1])][-branch_factor//2:]
-        # breakpoint()
-        return (x_fav, o_fav) 
+        if len(x_fav) + len(o_fav) >= branch_factor:
+            if len(x_fav) < branch_factor // 2:
+                o_fav = o_fav[-(branch_factor - len(x_fav)):]
+            elif len(o_fav) < branch_factor // 2:
+                x_fav = x_fav[:(branch_factor - len(o_fav))]
+            else:
+                x_fav = x_fav[:(branch_factor // 2)]
+                o_fav = o_fav[-(branch_factor // 2):]
+
+        return (x_fav, o_fav)
 
     def update_possible_moves(self, curr_poss: list, changed: list, move: tuple, \
                              board: Board, branch_factor: int, debug: bool=False) -> list:
@@ -79,26 +91,42 @@ class AI(Player):
         move_x, move_o = move[0], move[1]
         nxt_mark = 'X' if move[2] == 'O' else 'O'
 
+        x_fav = []
+        o_fav = []
         to_remove = {(move_x, move_o): 1}
 
         for (tile_x, tile_y), _ in changed:
             tile = board.logic[tile_y][tile_x]
             to_remove[(tile_x, tile_y)] = 1
-            new_poss_moves.append(((-sum(tile.len_chains_X), sum(tile.len_chains_O)), (tile_x, tile_y, nxt_mark)))
+
+            score_X = tile.get_value_mark('X')
+            score_O = tile.get_value_mark('O') 
+
+            if score_X != 0 or score_O != 0:
+                if -score_X > score_O:
+                    x_fav.append(((score_X, score_O), (tile_x, tile_y, nxt_mark)))
+                else:
+                    o_fav.append(((score_X, score_O), (tile_x, tile_y, nxt_mark)))
+            
+            # new_poss_moves.append(((-sum(tile.len_chains_X), sum(tile.len_chains_O)), (tile_x, tile_y, nxt_mark)))
         
         poss_x = [poss for poss in poss_x if (poss[1][0], poss[1][1]) not in to_remove]
         poss_o = [poss for poss in poss_o if (poss[1][0], poss[1][1]) not in to_remove]
 
         # breakpoint()
-
-        x_fav = [poss for poss in new_poss_moves if poss[0][0] < 0]
-        o_fav = [poss for poss in new_poss_moves if poss[0][1] > 0]
-
         x_fav = [(poss[0], (poss[1][0], poss[1][1], nxt_mark)) for poss in sorted(poss_x + x_fav, key=lambda x: x[0][0])]
         o_fav = [(poss[0], (poss[1][0], poss[1][1], nxt_mark)) for poss in sorted(poss_o + o_fav, key=lambda o: o[0][1])]
+        
+        if len(x_fav) + len(o_fav) >= branch_factor:
+            if len(x_fav) < branch_factor // 2:
+                o_fav = o_fav[-(branch_factor - len(x_fav)):]
+            elif len(o_fav) < branch_factor // 2:
+                x_fav = x_fav[:(branch_factor - len(o_fav))]
+            else:
+                x_fav = x_fav[:(branch_factor // 2)]
+                o_fav = o_fav[-(branch_factor // 2):]
 
-        new_poss_moves = (x_fav[:branch_factor//2], o_fav[-branch_factor//2:])
-        return new_poss_moves
+        return (x_fav, o_fav)
                 
     def get_move(self, board:Board, depth:int=5, branch_factor:int=20) -> tuple:
         """ Let the AI make a move given a board configuration """
@@ -106,6 +134,9 @@ class AI(Player):
 
         maximizer = self.mark == 'O'
         poss_x, poss_o = self.get_possible_moves(board, maximizer, branch_factor)
+
+        if len(poss_x) == 0 and len(poss_o) == 0:
+            raise Exception("Board is full. The game is tied")
 
         move, _ = self.negamaxAB(board, maximizer, depth, branch_factor, poss_moves=(poss_x, poss_o))
         print(self.minimax_stack_depth)
@@ -265,24 +296,43 @@ class AI(Player):
             self.minimax_stack_depth += 1
             
             orig_states = board.update_board(move, graphic=False)
+
             if board.check_win(move)[0]:
                 board.undo_change(orig_states, move)
                 return (move, float('inf'))
+            elif board.check_full():
+                board.undo_change(orig_states, move)
+                return (move, 0)
+
             if depth == 1:
-                nxt_ply_score = Board.score_board(board) * (1 if maximizer else -1)
+                state_score = Board.score_board(board) * (1 if maximizer else -1)
             else:
                 new_poss_moves = self.update_possible_moves(poss_moves, orig_states, move, board, branch_factor)
-                nxt_move , nxt_ply_score = \
-                    self.negamaxAB(board, maximizer=(not maximizer), depth=depth-1, branch_factor=branch_factor, \
-                                 poss_moves=new_poss_moves, alpha=-beta, beta=-alpha)
-                nxt_ply_score *= -1
 
-            choices.append((move, nxt_ply_score))
+                # assert self.check_duplicates(new_poss_moves) is False 
+
+                _ , state_score = \
+                    self.negamaxAB(board, maximizer=(not maximizer), depth=depth-1, branch_factor=branch_factor, \
+                                poss_moves=new_poss_moves, alpha=-beta, beta=-alpha)
+                state_score *= -1
+
+            choices.append((move, state_score))
             board.undo_change(orig_states, move)
 
-            if nxt_ply_score > alpha:
-                alpha = nxt_ply_score
+            if state_score > alpha:
+                alpha = state_score
             if alpha > beta:
                 break
-                
+        
         return max(choices, key=lambda x: x[1])
+
+    def check_duplicates(self, poss: list):
+        poss = sorted(poss[0] + poss[1], key=lambda x: x[1])
+
+        dup = poss[0]
+        for i in range(1, len(poss)):
+            if poss[i][1] == dup:
+                return True
+            dup = poss[i][1]
+        
+        return False
